@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#14202e">
+<title>Mosaic – a tile-drafting game</title>
+<style>
+:root{
+  --bg:#111b27; --panel:#1c2b3c; --panel2:#263a51; --ink:#eef2f6; --muted:#8fa4ba;
+  --accent:#f2b632; --good:#4fd18b; --bad:#ff7a7a;
+  --t:min(6.6vh,4.4vw);   /* main board tile (4p) */
+  --m:min(2.6vh,1.45vw);  /* mini board tile (4p) */
+  --f:min(5vh,2.7vw);     /* factory tile */
+}
+.p2{--t:min(5.9vh,4.4vw);--m:min(3.6vh,3vw)} .p3{--t:min(6.3vh,4.4vw);--m:min(3vh,2.2vw)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:radial-gradient(ellipse at 30% 20%,#1d3047,#0c141d 75%);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+#game{height:100vh;display:flex;flex-direction:column}
+#top{display:flex;align-items:center;gap:1.4vw;padding:1vh 1.6vw;min-height:8vh;background:rgba(0,0,0,.25);border-bottom:1px solid rgba(255,255,255,.06)}
+.brand{font-family:Georgia,"Times New Roman",serif;font-size:3.6vh;font-weight:700;letter-spacing:.06em;color:var(--accent)}
+.info{color:var(--muted);font-size:2.1vh;white-space:nowrap}
+#status{flex:1;display:flex;align-items:center;gap:1vw;font-size:2.5vh;min-width:0}
+#status .sub{display:block;color:var(--muted);font-size:1.8vh;margin-top:.3vh}
+.chip{display:inline-block;width:2.6vh;height:2.6vh;vertical-align:middle;margin:0 .3vw}
+.btn{background:var(--panel2);border:0;border-radius:1.2vh;padding:1.2vh 1.8vw;min-height:6vh;font-size:2.3vh;font-weight:600}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:var(--accent);color:#231700}
+.btn.ghost{background:transparent;border:2px solid var(--panel2)}
+#play{flex:1;display:flex;min-height:0}
+#left{flex:0 0 41%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.4vh;padding:1.5vh 1vw}
+#right{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2vh;padding:1vh 1vw;min-width:0}
+#factories{display:flex;flex-wrap:wrap;justify-content:center;gap:1.6vh 1.4vw;max-width:100%}
+.factory{width:calc(var(--f)*2.75);height:calc(var(--f)*2.75);border-radius:50%;display:grid;
+  grid-template-columns:repeat(2,var(--f));gap:calc(var(--f)*.14);place-content:center;
+  background:radial-gradient(circle at 35% 30%,#f4ece0,#d9cdb9 55%,#a8977c);box-shadow:0 .6vh 1.4vh rgba(0,0,0,.5),inset 0 -.5vh 1vh rgba(0,0,0,.2)}
+.factory.empty{opacity:.35}
+.factory .tile,.cgroup .tile{width:var(--f);height:var(--f)}
+#center{min-width:60%;max-width:100%;min-height:calc(var(--f)*2.1);background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.18);
+  border-radius:2vh;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:1.4vw;padding:1.4vh 1.4vw;position:relative}
+#center .lbl{position:absolute;top:-1.3vh;left:1.4vw;font-size:1.7vh;background:var(--bg);padding:0 .6vw;color:var(--muted);border-radius:.6vh}
+#center .none{color:var(--muted);font-size:2vh}
+.cgroup{position:relative;padding:.6vh;border-radius:1vh}
+.cgroup .badge{position:absolute;right:-.6vh;bottom:-.6vh;background:#0b121a;color:#fff;border:2px solid var(--panel2);
+  font-size:calc(var(--f)*.36);font-weight:700;min-width:calc(var(--f)*.6);text-align:center;border-radius:99px;padding:0 .4vh}
+.cgroup.sel .tile{transform:translateY(-12%) scale(1.06);box-shadow:0 0 0 .45vh var(--accent),0 1vh 1.4vh rgba(0,0,0,.5)}
+
+.tile{border-radius:14%;box-shadow:inset 0 -.35vh 0 rgba(0,0,0,.25),0 .25vh .4vh rgba(0,0,0,.45);transition:transform .15s,box-shadow .15s,opacity .2s}
+.tile[data-act]{cursor:pointer}
+.tile.sel{transform:translateY(-12%) scale(1.06);box-shadow:0 0 0 .45vh var(--accent),0 1vh 1.4vh rgba(0,0,0,.5)}
+.tile.ghost{opacity:.17;box-shadow:none;filter:saturate(.6)}
+.tile.ghost.hint{opacity:.7;outline:.35vh dashed var(--accent);outline-offset:-.1vh;filter:none}
+.tile.new{animation:pop .6s ease-out}
+@keyframes pop{0%{transform:scale(1.5);box-shadow:0 0 0 .6vh #fff}100%{transform:scale(1)}}
+
+.board{--s:var(--t);background:var(--panel);border-radius:calc(var(--s)*.25);padding:calc(var(--s)*.28) calc(var(--s)*.34);
+  border:calc(var(--s)*.05 + 1px) solid transparent;box-shadow:0 1vh 2.4vh rgba(0,0,0,.35)}
+.board.mini{--s:var(--m)}
+.board.active{border-color:var(--accent);box-shadow:0 0 0 calc(var(--s)*.06) rgba(242,182,50,.25),0 1vh 2.4vh rgba(0,0,0,.35)}
+.bhead{display:flex;justify-content:space-between;align-items:baseline;font-size:calc(var(--s)*.44);margin-bottom:calc(var(--s)*.22);gap:1vw}
+.bhead .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bhead .tag{font-size:.7em;color:var(--muted);font-weight:500;margin-left:.4em}
+.bhead .sc{font-family:Georgia,serif;font-weight:700;font-size:1.35em;color:var(--accent)}
+.bbody{display:flex;gap:calc(var(--s)*.3);align-items:flex-start}
+.lines{display:flex;flex-direction:column;gap:calc(var(--s)*.1);padding:calc(var(--s)*.12) 0}
+.line{display:flex;justify-content:flex-end;gap:calc(var(--s)*.1);width:calc(var(--s)*5.4);border-radius:calc(var(--s)*.12)}
+.cell{width:var(--s);height:var(--s);border-radius:14%;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);flex:0 0 auto}
+.cell>.tile{width:100%;height:100%}
+.wall{display:grid;grid-template-columns:repeat(5,var(--s));gap:calc(var(--s)*.1);padding:calc(var(--s)*.12);background:#0e1823;border-radius:calc(var(--s)*.15)}
+.wall .cell{background:none;box-shadow:none}
+.floor{display:flex;gap:calc(var(--s)*.1);margin-top:calc(var(--s)*.28);border-radius:calc(var(--s)*.12);width:max-content}
+.fcell{display:flex;flex-direction:column;align-items:center;gap:calc(var(--s)*.04);font-size:calc(var(--s)*.3);color:var(--bad);font-weight:700}
+.target{outline:calc(var(--s)*.06 + 2px) dashed var(--accent);outline-offset:calc(var(--s)*.06 + 1px);background:rgba(242,182,50,.13);cursor:pointer;animation:pulse 1.1s ease-in-out infinite}
+.target:active{background:rgba(242,182,50,.35)}
+@keyframes pulse{50%{outline-color:rgba(242,182,50,.35)}}
+#minis{display:flex;gap:1.2vw;justify-content:center}
+
+#ov{position:fixed;inset:0;background:rgba(4,9,15,.74);display:none;align-items:center;justify-content:center;z-index:10}
+#ov.show{display:flex}
+.modal{background:var(--panel);border-radius:2vh;padding:3.2vh 3vw;max-height:92vh;overflow:auto;min-width:44vw;max-width:80vw;font-size:2.4vh;box-shadow:0 2vh 6vh rgba(0,0,0,.6)}
+.modal h1{font-family:Georgia,serif;color:var(--accent);font-size:6vh;margin:0;letter-spacing:.06em}
+.modal h2{font-family:Georgia,serif;margin:0 0 2vh;font-size:3.8vh}
+.modal p{color:var(--muted);margin:.6vh 0 2.4vh}
+.modal .rowf{display:flex;gap:1vw;align-items:center;margin:1.4vh 0;flex-wrap:wrap}
+.seg .btn{min-width:8vw}.seg .btn.on{background:var(--accent);color:#231700}
+.prow input{flex:1;min-width:20vw;font:inherit;font-size:2.6vh;padding:1.2vh 1vw;border-radius:1vh;border:2px solid var(--panel2);background:#0f1a26;color:var(--ink)}
+.prow .btn{min-width:10vw}
+.actions{display:flex;gap:1vw;margin-top:3vh;flex-wrap:wrap}
+table{border-collapse:collapse;width:100%;font-size:2.5vh}
+td,th{padding:1.1vh 1vw;text-align:right;border-bottom:1px solid rgba(255,255,255,.08)}
+td:first-child,th:first-child{text-align:left}
+th{color:var(--muted);font-weight:500;font-size:2vh}
+.plus{color:var(--good)}.minus{color:var(--bad)}.big{font-family:Georgia,serif;font-weight:700;color:var(--accent);font-size:3vh}
+.rules li{margin:1vh 0;line-height:1.4}.rules b{color:var(--accent)}
+.legend{display:flex;gap:1.6vw;flex-wrap:wrap;margin:1vh 0 2vh}.legend span{display:flex;align-items:center;gap:.5vw;color:var(--muted)}
+.legend .tile{width:4vh;height:4vh}
+
+/* Portrait / narrow fallback (phones, testing) */
+@media (max-aspect-ratio:1/1){
+  :root{--t:7.4vw;--m:3.9vw;--f:7.5vw}.p2{--m:5vw}.p3{--m:4.4vw}
+  html,body{overflow:auto}#game{height:auto;min-height:100vh}
+  #play{flex-direction:column}#left{flex:none}
+  #top{flex-wrap:wrap}.brand{font-size:5vw}.info,#status{font-size:3.4vw}.btn{font-size:3.4vw;min-height:auto}
+  .modal{font-size:3.6vw;max-width:94vw}
+}
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="top"></div>
+  <div id="play"><div id="left"><div id="factories"></div><div id="center"></div></div><div id="right"><div id="mainb"></div><div id="minis"></div></div></div>
+</div>
+<div id="ov"></div>
+<script>
+"use strict";
+/* ---------- constants & tile art (original designs) ---------- */
+const NAMES=['Cobalt','Amber','Crimson','Onyx','Pearl'];
+const PEN=[1,1,2,2,2,3,3];
+const FCOUNT={2:5,3:7,4:9};
+const FAST=/[?&]fast/.test(location.search);
+const ART=[
+ ['#2a6bd1','#163f86',"<rect x='31' y='31' width='38' height='38' fill='none' stroke='#dce9ff' stroke-width='6'/><rect x='31' y='31' width='38' height='38' fill='none' stroke='#dce9ff' stroke-width='6' transform='rotate(45 50 50)'/><circle cx='50' cy='50' r='7' fill='#f2b632'/>"],
+ ['#f5bd3c','#d48c12',"<circle cx='50' cy='50' r='27' fill='none' stroke='#7a4400' stroke-width='6'/><circle cx='50' cy='50' r='10' fill='#7a4400'/><circle cx='50' cy='50' r='39' fill='none' stroke='#fff4d6' stroke-width='2.5' opacity='.7'/>"],
+ ['#d23a44','#951d27',"<polygon points='50,15 85,50 50,85 15,50' fill='none' stroke='#ffdcd5' stroke-width='6'/><circle cx='50' cy='50' r='9' fill='#ffdcd5'/>"],
+ ['#30353d','#121418',"<path d='M50 22V78M22 50H78' stroke='#3fc7b5' stroke-width='8' stroke-linecap='round'/><circle cx='0' cy='0' r='17' fill='#3fc7b5'/><circle cx='100' cy='0' r='17' fill='#3fc7b5'/><circle cx='0' cy='100' r='17' fill='#3fc7b5'/><circle cx='100' cy='100' r='17' fill='#3fc7b5'/>"],
+ ['#f1f3f5','#c9d1d8',"<g fill='#3a6db5'><circle cx='35' cy='50' r='14'/><circle cx='65' cy='50' r='14'/><circle cx='50' cy='35' r='14'/><circle cx='50' cy='65' r='14'/></g><circle cx='50' cy='50' r='7' fill='#f1f3f5'/>"]
+];
+(function(){
+  const svg=s=>`url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>${s}<rect x='5' y='5' width='90' height='90' rx='10' fill='none' stroke='rgba(255,255,255,.28)' stroke-width='2'/></svg>`)}") center/100% 100% no-repeat`;
+  let css=ART.map((a,i)=>`.c${i}{background:${svg(a[2])},linear-gradient(145deg,${a[0]},${a[1]})}`).join('\n');
+  css+=`.first{background:${svg("<rect width='100' height='100' fill='#f6efe0'/><text x='50' y='71' font-size='62' text-anchor='middle' font-family='Georgia,serif' font-weight='bold' fill='#2b2b2b'>1</text>")}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+})();
+
+/* ---------- state ---------- */
+let S=null, sel=null, busy=false, aiTimer=null, ovBack=null;
+let cfg=load('mosaic-cfg')||{n:2,players:[{name:'Player 1',ai:false},{name:'CPU 2',ai:true},{name:'CPU 3',ai:true},{name:'CPU 4',ai:true}]};
+function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function store(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function save(){store('mosaic-save',S);store('mosaic-cfg',cfg)}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+const wallCol=(color,r)=>(color+r)%5;
+const wallColor=(r,c)=>(c-r+5)%5;
+const floorPen=k=>PEN.slice(0,Math.min(k,7)).reduce((a,b)=>a+b,0);
+
+function newGame(){
+  const n=cfg.n;
+  S={players:cfg.players.slice(0,n).map((p,i)=>({name:(p.name||'').trim()||('Player '+(i+1)),ai:p.ai,score:0,
+      lines:Array.from({length:5},()=>({color:-1,count:0})),wall:Array.from({length:5},()=>Array(5).fill(false)),floor:[]})),
+     factories:Array.from({length:FCOUNT[n]},()=>[]),center:[],centerMarker:true,bag:[],lid:[],
+     cur:0,firstNext:null,round:1,phase:'play',summary:null,last:'',fresh:[]};
+  for(let c=0;c<5;c++)for(let i=0;i<20;i++)S.bag.push(c);
+  shuffle(S.bag);fill();
+  sel=null;save();hideOv();render();scheduleAI();
+}
+function fill(){
+  for(const f of S.factories){f.length=0;
+    for(let i=0;i<4;i++){if(!S.bag.length){S.bag=shuffle(S.lid);S.lid=[]}if(!S.bag.length)break;f.push(S.bag.pop())}
+    f.sort();}
+}
+function canPlace(p,l,color){
+  if(l===5)return true;
+  if(p.wall[l][wallCol(color,l)])return false;
+  const L=p.lines[l];
+  return L.count===0||(L.color===color&&L.count<l+1);
+}
+const srcTiles=src=>src==='c'?S.center:S.factories[src];
+const countIn=(src,color)=>srcTiles(src).filter(t=>t===color).length;
+
+function apply(m){
+  const p=S.players[S.cur];let n;let tookMarker=false;
+  if(m.src==='c'){
+    n=countIn('c',m.color);S.center=S.center.filter(t=>t!==m.color);
+    if(S.centerMarker){S.centerMarker=false;p.floor.push(-1);S.firstNext=S.cur;tookMarker=true}
+  }else{
+    const f=S.factories[m.src];n=f.filter(t=>t===m.color).length;
+    S.center.push(...f.filter(t=>t!==m.color));f.length=0;S.center.sort();
+  }
+  let over=n;
+  if(m.line<5){const L=p.lines[m.line];const put=Math.min(n,m.line+1-L.count);L.color=m.color;L.count+=put;over=n-put}
+  for(let i=0;i<over;i++){if(p.floor.length<7)p.floor.push(m.color);else S.lid.push(m.color)}
+  S.last=`${p.name} took ${n} ${NAMES[m.color]} → ${m.line<5?'row '+(m.line+1):'floor'}${over&&m.line<5?` (${over} to floor)`:''}${tookMarker?', +first-player token':''}`;
+  if(S.factories.every(f=>!f.length)&&!S.center.length)endRound();
+  else S.cur=(S.cur+1)%S.players.length;
+}
+function placeScore(w,r,c){
+  let h=1,v=1;
+  for(let i=c-1;i>=0&&w[r][i];i--)h++;for(let i=c+1;i<5&&w[r][i];i++)h++;
+  for(let i=r-1;i>=0&&w[i][c];i--)v++;for(let i=r+1;i<5&&w[i][c];i++)v++;
+  return(h===1&&v===1)?1:(h>1?h:0)+(v>1?v:0);
+}
+function endRound(){
+  const rows=[];S.fresh=[];
+  S.players.forEach((p,pi)=>{
+    let gain=0;
+    for(let r=0;r<5;r++){const L=p.lines[r];
+      if(L.count===r+1){const c=wallCol(L.color,r);gain+=placeScore(p.wall,r,c);p.wall[r][c]=true;S.fresh.push([pi,r,c]);
+        for(let i=0;i<r;i++)S.lid.push(L.color);p.lines[r]={color:-1,count:0};}}
+    const pen=floorPen(p.floor.length);
+    p.floor.forEach(t=>{if(t>=0)S.lid.push(t)});p.floor=[];
+    const before=p.score;p.score=Math.max(0,p.score+gain-pen);
+    rows.push({gain,pen,net:p.score-before});
+  });
+  S.summary={round:S.round,rows};
+  S.cur=S.firstNext??((S.cur+1)%S.players.length);S.firstNext=null;
+  const done=S.players.some(p=>p.wall.some(r=>r.every(Boolean)));
+  if(!done){S.centerMarker=true;S.round++;fill();}
+  if(done||S.factories.every(f=>!f.length)){finish();return}
+  S.phase='summary';
+}
+function finish(){
+  S.players.forEach(p=>{
+    const rows=p.wall.filter(r=>r.every(Boolean)).length;
+    let cols=0;for(let c=0;c<5;c++)if(p.wall.every(r=>r[c]))cols++;
+    let colors=0;for(let k=0;k<5;k++)if([0,1,2,3,4].every(r=>p.wall[r][wallCol(k,r)]))colors++;
+    p.bonus={rows,cols,colors,pts:rows*2+cols*7+colors*10};p.score+=p.bonus.pts;
+  });
+  S.phase='over';
+}
+
+/* ---------- CPU player ---------- */
+function aiMove(){
+  const p=S.players[S.cur];let best=null;
+  const sources=S.factories.map((f,i)=>i).filter(i=>S.factories[i].length);if(S.center.length)sources.push('c');
+  for(const src of sources){
+    const tiles=srcTiles(src);
+    for(const color of new Set(tiles)){
+      const n=tiles.filter(t=>t===color).length,mk=src==='c'&&S.centerMarker;
+      for(let l=0;l<=5;l++){
+        if(!canPlace(p,l,color))continue;
+        const v=evalMove(p,l,color,n,mk);
+        if(!best||v>best.v)best={src,color,line:l,v};
+      }
+    }
+  }
+  return best;
+}
+function evalMove(p,l,color,n,mk){
+  let v=0,over=n;
+  if(l<5){
+    const cap=l+1,L=p.lines[l],put=Math.min(n,cap-L.count),after=L.count+put;over=n-put;
+    if(after===cap){
+      const c=wallCol(color,l);v+=placeScore(p.wall,l,c)+1.5;
+      v+=p.wall[l].filter(Boolean).length*.35;
+      let col=0;for(let r=0;r<5;r++)if(p.wall[r][c])col++;v+=col*.3;
+    }else v+=put*.6-(cap-after)*.45;
+  }
+  const f0=p.floor.length+(mk?1:0);
+  v-=floorPen(f0+over)-floorPen(p.floor.length);
+  if(mk)v+=.6;
+  return v+Math.random()*.3;
+}
+function scheduleAI(){
+  clearTimeout(aiTimer);
+  if(!S||S.phase!=='play'||!S.players[S.cur].ai)return;
+  busy=true;
+  aiTimer=setTimeout(()=>{
+    const m=aiMove();sel={src:m.src,color:m.color};render();
+    aiTimer=setTimeout(()=>{sel=null;busy=false;apply(m);afterMove()},FAST?5:850);
+  },FAST?5:550);
+}
+function afterMove(){
+  save();render();
+  if(S.phase==='summary'||S.phase==='over')showSummary();else scheduleAI();
+}
+
+/* ---------- rendering ---------- */
+const tile=(c,cls='',attrs='')=>`<div class="tile ${c<0?'first':'c'+c} ${cls}" ${attrs}></div>`;
+const chip=c=>`<span class="chip">${tile(c,'','style="width:100%;height:100%"')}</span>`;
+function mainIdx(){
+  if(!S.players[S.cur].ai)return S.cur;
+  const h=S.players.findIndex(p=>!p.ai);return h>=0?h:S.cur;
+}
+function boardHTML(i,kind){
+  const p=S.players[i],active=i===S.cur&&S.phase==='play';
+  const tgt=l=>active&&sel&&canPlace(p,l,sel.color);
+  const fresh=S.phase!=='play'?S.fresh:[];
+  let lines='',wall='';
+  for(let r=0;r<5;r++){
+    const cap=r+1,L=p.lines[r],t=tgt(r);let cells='';
+    for(let j=0;j<cap;j++)cells+=`<div class="cell">${j>=cap-L.count?tile(L.color):''}</div>`;
+    lines+=`<div class="line${t?' target':''}" ${t?`data-act="place" data-line="${r}"`:''}>${cells}</div>`;
+    for(let c=0;c<5;c++){
+      const filled=p.wall[r][c],hint=!filled&&t&&c===wallCol(sel.color,r);
+      const isNew=filled&&fresh.some(f=>f[0]===i&&f[1]===r&&f[2]===c);
+      wall+=`<div class="cell">${tile(wallColor(r,c),filled?(isNew?'new':''):'ghost'+(hint?' hint':''))}</div>`;
+    }
+  }
+  const tf=tgt(5);let floor='';
+  for(let k=0;k<7;k++)floor+=`<div class="fcell"><div class="cell">${p.floor[k]!==undefined?tile(p.floor[k]):''}</div>−${PEN[k]}</div>`;
+  return `<div class="board ${kind}${active?' active':''}">
+    <div class="bhead"><span class="nm">${esc(p.name)}${p.ai?'<span class="tag">CPU</span>':''}</span><span class="sc">${p.score}</span></div>
+    <div class="bbody"><div class="lines">${lines}</div><div class="wall">${wall}</div></div>
+    <div class="floor${tf?' target':''}" ${tf?'data-act="place" data-line="5"':''}>${floor}</div></div>`;
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){
+  if(!S)return;
+  const n=S.players.length,p=S.players[S.cur];
+  document.body.className='p'+n;
+  let st='';
+  if(S.phase==='play'){
+    if(p.ai)st=`<span><b>${esc(p.name)}</b> is choosing…</span>`;
+    else if(sel)st=`<span><b>${esc(p.name)}</b>: place ${countIn(sel.src,sel.color)} ${chip(sel.color)} — tap a glowing row or the floor</span><button class="btn ghost" data-act="cancel">Cancel</button>`;
+    else st=`<span><b>${esc(p.name)}</b>: tap tiles on a plate or in the center<span class="sub">${esc(S.last||'')}</span></span>`;
+  }else st=`<span>Round ${S.summary?S.summary.round:S.round} complete</span>`;
+  const fs=document.fullscreenEnabled||document.webkitFullscreenEnabled;
+  $('top').innerHTML=`<div class="brand">MOSAIC</div><div class="info">Round ${S.round} · Bag ${S.bag.length}</div>
+    <div id="status">${st}</div>${fs?'<button class="btn" data-act="fs">Full screen</button>':''}<button class="btn" data-act="rules">Rules</button><button class="btn" data-act="menu">Menu</button>`;
+  $('factories').innerHTML=S.factories.map((f,i)=>`<div class="factory${f.length?'':' empty'}">${
+    f.map(c=>tile(c,sel&&sel.src===i&&sel.color===c?'sel':'',`data-act="pick" data-src="${i}" data-color="${c}"`)).join('')}</div>`).join('');
+  let ch=`<span class="lbl">CENTER</span>`;
+  if(S.centerMarker)ch+=`<div class="cgroup">${tile(-1)}</div>`;
+  for(let c=0;c<5;c++){const k=S.center.filter(t=>t===c).length;
+    if(k)ch+=`<div class="cgroup${sel&&sel.src==='c'&&sel.color===c?' sel':''}" data-act="pick" data-src="c" data-color="${c}">${tile(c)}<span class="badge">${k}</span></div>`;}
+  if(!S.center.length&&!S.centerMarker)ch+=`<span class="none">empty</span>`;
+  $('center').innerHTML=ch;
+  const mi=mainIdx();
+  $('mainb').innerHTML=boardHTML(mi,'main');
+  const order=[];for(let k=1;k<n;k++)order.push((mi+k)%n);
+  $('minis').innerHTML=order.map(i=>boardHTML(i,'mini')).join('');
+}
+const $=id=>document.getElementById(id);
+
+/* ---------- overlays ---------- */
+function showOv(html){$('ov').innerHTML=`<div class="modal">${html}</div>`;$('ov').classList.add('show')}
+function hideOv(){$('ov').classList.remove('show');$('ov').innerHTML=''}
+function showSetup(){
+  const saved=load('mosaic-save');
+  let rows='';
+  for(let i=0;i<cfg.n;i++){const p=cfg.players[i];
+    rows+=`<div class="rowf prow"><input data-i="${i}" value="${esc(p.name)}" maxlength="14" autocomplete="off">
+      <button class="btn${p.ai?'':' primary'}" data-act="human" data-i="${i}">Human</button><button class="btn${p.ai?' primary':''}" data-act="cpu" data-i="${i}">CPU</button></div>`;}
+  showOv(`<h1>MOSAIC</h1><p>A tile-drafting game for 2–4 players. Pass-and-play or against the CPU.</p>
+    <div class="rowf seg">Players:&nbsp;${[2,3,4].map(k=>`<button class="btn${cfg.n===k?' on':''}" data-act="count" data-n="${k}">${k}</button>`).join('')}</div>
+    ${rows}
+    <div class="actions"><button class="btn primary" data-act="start">Start new game</button>
+    ${saved&&saved.phase!=='over'?'<button class="btn" data-act="resume">Resume saved game</button>':''}
+    <button class="btn ghost" data-act="rules">How to play</button></div>`);
+}
+function showRules(){
+  ovBack=$('ov').classList.contains('show')&&!$('ov').querySelector('.rules')?$('ov').innerHTML:null;
+  showOv(`<div class="rules"><h2>How to play</h2>
+   <div class="legend">${NAMES.map((n,i)=>`<span>${tile(i)}${n}</span>`).join('')}<span>${tile(-1)}First player</span></div>
+   <ol>
+   <li><b>Draft.</b> On your turn take <i>every</i> tile of one color from a single plate — the leftovers slide to the center — or take every tile of one color from the center.</li>
+   <li><b>First player token.</b> The first person to draw from the center each round also takes the “1” token. It sits on their floor line (−1) and they start the next round.</li>
+   <li><b>Place.</b> Put the tiles on one pattern row (row 1 holds 1 tile … row 5 holds 5). A row can only hold one color, and not a color already on that row of your wall. Tiles that don’t fit drop to your floor line. You can also drop them straight to the floor.</li>
+   <li><b>Tile the wall.</b> When the plates and center are empty, each <i>full</i> pattern row moves one tile onto its matching wall space; the rest are discarded. Partly-filled rows wait for next round.</li>
+   <li><b>Score.</b> A placed tile touching nothing scores 1. Otherwise count the connected tiles in its row (if 2+) plus the connected tiles in its column (if 2+).</li>
+   <li><b>Floor penalties.</b> −1, −1, −2, −2, −2, −3, −3 for each floor slot used. Scores never drop below 0.</li>
+   <li><b>Game end.</b> The game ends after the round in which anyone completes a horizontal row on their wall. Bonuses: +2 per complete row, +7 per complete column, +10 per color with all 5 tiles placed. Ties go to whoever has more complete rows.</li>
+   </ol></div><div class="actions"><button class="btn primary" data-act="closerules">Got it</button></div>`);
+}
+function showSummary(){
+  const sm=S.summary,over=S.phase==='over';
+  let html=`<h2>${over?'Game over':'Round '+sm.round+' scoring'}</h2><table><tr><th>Player</th><th>Wall</th><th>Floor</th>${over?'<th>Row/Col/Color bonus</th>':''}<th>Score</th></tr>`;
+  let idx=S.players.map((p,i)=>i);
+  if(over)idx.sort((a,b)=>S.players[b].score-S.players[a].score||S.players[b].bonus.rows-S.players[a].bonus.rows);
+  idx.forEach((i,rank)=>{const p=S.players[i],r=sm.rows[i];
+    html+=`<tr><td>${over&&rank===0?'🏆 ':''}${esc(p.name)}</td><td class="plus">+${r.gain}</td><td class="minus">${r.pen?'−'+r.pen:'0'}</td>${
+      over?`<td class="plus">+${p.bonus.pts} <span style="color:var(--muted);font-size:.8em">(${p.bonus.rows}r ${p.bonus.cols}c ${p.bonus.colors}k)</span></td>`:''}<td class="big">${p.score}</td></tr>`;});
+  html+='</table>';
+  if(over){const w=S.players[idx[0]];html+=`<p style="margin-top:2vh;font-size:3vh;color:var(--ink)"><b>${esc(w.name)}</b> wins with ${w.score} points!</p>
+    <div class="actions"><button class="btn primary" data-act="start">Play again</button><button class="btn" data-act="viewboard">View boards</button><button class="btn ghost" data-act="menu">Menu</button></div>`;}
+  else html+=`<p style="margin-top:2vh">${esc(S.players[S.cur].name)} starts round ${S.round}.</p><div class="actions"><button class="btn primary" data-act="next">Next round</button></div>`;
+  showOv(html);
+}
+
+/* ---------- input ---------- */
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const a=el.dataset.act,d=el.dataset;
+  const humanTurn=S&&S.phase==='play'&&!busy&&!S.players[S.cur].ai;
+  switch(a){
+    case 'pick':{ if(!humanTurn)return;
+      const src=d.src==='c'?'c':+d.src,color=+d.color;
+      sel=(sel&&sel.src===src&&sel.color===color)?null:{src,color};render();break;}
+    case 'place':{ if(!humanTurn||!sel)return;
+      const line=+d.line;if(!canPlace(S.players[S.cur],line,sel.color))return;
+      const m={src:sel.src,color:sel.color,line};sel=null;apply(m);afterMove();break;}
+    case 'cancel':sel=null;render();break;
+    case 'count':cfg.n=+d.n;showSetup();break;
+    case 'human':case 'cpu':{const p=cfg.players[+d.i];const wasDefault=/^(Player|CPU) \d$/.test(p.name);p.ai=a==='cpu';
+      if(wasDefault)p.name=(p.ai?'CPU ':'Player ')+(+d.i+1);showSetup();break;}
+    case 'start':store('mosaic-cfg',cfg);newGame();break;
+    case 'resume':S=load('mosaic-save');sel=null;busy=false;hideOv();render();
+      if(S.phase==='summary')showSummary();else scheduleAI();break;
+    case 'menu':clearTimeout(aiTimer);busy=false;sel=null;if(S)render();showSetup();break;
+    case 'rules':showRules();break;
+    case 'closerules':
+      if(ovBack){$('ov').innerHTML=ovBack;ovBack=null}
+      else if(S&&S.phase==='summary')showSummary();
+      else if(S&&S.phase==='play'){hideOv();if(!busy)scheduleAI();}
+      else if(!S)showSetup();else hideOv();
+      break;
+    case 'next':S.phase='play';S.summary=null;S.fresh=[];save();hideOv();render();scheduleAI();break;
+    case 'viewboard':hideOv();showToastBack();break;
+    case 'fs':{const de=document.documentElement;
+      if(document.fullscreenElement||document.webkitFullscreenElement)(document.exitFullscreen||document.webkitExitFullscreen).call(document);
+      else (de.requestFullscreen||de.webkitRequestFullscreen).call(de);break;}
+  }
+});
+document.addEventListener('input',e=>{if(e.target.matches('input[data-i]'))cfg.players[+e.target.dataset.i].name=e.target.value});
+function showToastBack(){$('status').innerHTML=`<span>Final boards</span><button class="btn primary" data-act="showfinal">Results</button>`}
+document.addEventListener('click',e=>{if(e.target.closest('[data-act="showfinal"]'))showSummary()});
+document.addEventListener('dblclick',e=>e.preventDefault());
+document.addEventListener('gesturestart',e=>e.preventDefault());
+window.addEventListener('resize',()=>{});
+
+/* ---------- boot ---------- */
+(function boot(){
+  const saved=load('mosaic-save');
+  if(saved&&saved.phase!=='over'){S=saved;render();}
+  else{cfg.n=cfg.n||2;S=null;}
+  showSetup();
+})();
+</script>
+</body>
+</html>
